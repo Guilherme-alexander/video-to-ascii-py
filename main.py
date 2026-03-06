@@ -1,3 +1,5 @@
+# [TEST] python main.py video.mp4 -w 100 --height 26 --fps 40 -s 10 --chars "01"
+
 import cv2
 import pygame
 import time
@@ -26,9 +28,9 @@ def get_terminal_height():
         height = int(os.environ.get('LINES', 24))
         if height < 10:
             height = 24
-        return height + 5  # Margem para status + segurança (DEFAULT)
+        return height + 5
     except:
-        return 29  # 24 + 5
+        return 29
 
 def frame_to_ascii(frame, width, chars, aspect_correction=0.45):
     h, w = frame.shape[:2]
@@ -48,7 +50,6 @@ def frame_to_ascii(frame, width, chars, aspect_correction=0.45):
     return lines, height
 
 def play_in_terminal(video_path, width=65, height_limit=29, fps_target=60, seconds=120, skip_frames=15, audio_delay=5.0, chars=" .:-=+*#%@", frames_all=False, save=False):
-    # Extrai áudio automaticamente
     audio_path = extract_audio(video_path)
     pygame.mixer.init()
     pygame.mixer.music.load(str(audio_path))
@@ -68,10 +69,9 @@ def play_in_terminal(video_path, width=65, height_limit=29, fps_target=60, secon
     skip_frames = 1 if frames_all else skip_frames
     duration_sec = max_frames / fps
     
-    print("\033[?25l", end="", flush=True)  # Esconde cursor
-    print("\033[?7l", end="", flush=True)  # Desabilita auto-wrap
+    print("\033[?25l", end="", flush=True)
+    print("\033[?7l", end="", flush=True)
     
-    # Calcula altura fixa uma vez (do primeiro frame)
     ret, first_frame = cap.read()
     if not ret:
         print("Erro no primeiro frame.")
@@ -79,7 +79,6 @@ def play_in_terminal(video_path, width=65, height_limit=29, fps_target=60, secon
     _, calculated_height = frame_to_ascii(first_frame, width, chars)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     
-    # *** USA height_limit do argumento ***
     TERMINAL_HEIGHT = height_limit
     fixed_height = min(calculated_height, TERMINAL_HEIGHT)
     
@@ -89,7 +88,6 @@ def play_in_terminal(video_path, width=65, height_limit=29, fps_target=60, secon
     print(f"Altura configurada: {TERMINAL_HEIGHT} linhas (usando {fixed_height})")
     print("Pressione Ctrl+C para parar\n")
     
-    # Config para save
     output_dir = None
     config = None
     saved_frame_idx = 0
@@ -164,7 +162,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Vídeo → ASCII art no terminal com áudio (SEM SCROLLBACK)")
     parser.add_argument("video", help="Caminho do vídeo")
     parser.add_argument("-w", "--width", type=int, default=115, help="Largura em caracteres")
-    parser.add_argument("--height", type=int, default=29, help="Altura máxima (linhas)")  # ← NOVO!
+    parser.add_argument("--height", type=int, default=29, help="Altura máxima (linhas)")
     parser.add_argument("--fps", type=int, default=34, help="FPS alvo")
     parser.add_argument("--seconds", type=int, default=180, help="Duração máxima (segundos)")
     parser.add_argument("-s", "--skip-frames", type=int, default=15, help="Pular frames")
