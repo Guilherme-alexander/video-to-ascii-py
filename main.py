@@ -9,10 +9,6 @@ from pathlib import Path
 import argparse
 from moviepy.editor import VideoFileClip
 
-# python main.py video.mp4 -w 115 --fps 35 -s 15 --chars "0123456789"
-# python main.py video.mp4 -w 130 --fps 35 -s 15 --chars ".:-=+*#%@"
-# [FULLSCREEN] python main.py video.mp4 -w 120 --fps 40 -s 10 --chars "01"
-
 def extract_audio(video_path):
     audio_path = Path("audio.wav")
     if audio_path.exists():
@@ -23,6 +19,16 @@ def extract_audio(video_path):
     video.audio.write_audiofile(str(audio_path))
     print("Áudio extraído com sucesso!")
     return audio_path
+
+def get_terminal_height():
+    """Detecta altura real do terminal"""
+    try:
+        height = int(os.environ.get('LINES', 24))
+        if height < 10:
+            height = 24
+        return height + 5  # Margem para status + segurança (DEFAULT)
+    except:
+        return 29  # 24 + 5
 
 def frame_to_ascii(frame, width, chars, aspect_correction=0.45):
     h, w = frame.shape[:2]
@@ -41,17 +47,16 @@ def frame_to_ascii(frame, width, chars, aspect_correction=0.45):
         lines.append(line + "\033[0m")
     return lines, height
 
-def play_in_terminal(video_path, width=65, fps_target=60, seconds=120, skip_frames=15, audio_delay=5.0, chars=" 0123456789", frames_all=False, save=False):
+def play_in_terminal(video_path, width=65, height_limit=29, fps_target=60, seconds=120, skip_frames=15, audio_delay=5.0, chars=" .:-=+*#%@", frames_all=False, save=False):
     # Extrai áudio automaticamente
     audio_path = extract_audio(video_path)
-    # Inicializa pygame para áudio
     pygame.mixer.init()
     pygame.mixer.music.load(str(audio_path))
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         print("Erro ao abrir vídeo.")
         return
-    # Detecta FPS real
+    
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps <= 0:
         fps = 15
@@ -62,20 +67,28 @@ def play_in_terminal(video_path, width=65, fps_target=60, seconds=120, skip_fram
     max_frames = total_frames if frames_all else (int(seconds * fps) if seconds else total_frames)
     skip_frames = 1 if frames_all else skip_frames
     duration_sec = max_frames / fps
-    print("\033[?25l", end="", flush=True) # Esconde cursor
-    print(f"Reproduzindo: {video_path.name}")
-    print(f"FPS usado: {fps:.1f} | Duração: {duration_sec:.1f} seg | Frames: {max_frames}")
-    print(f"Pulando frames: {skip_frames} em {skip_frames} | Delay áudio: {audio_delay:.1f} seg")
-    print("Pressione Ctrl+C para parar\n")
-    start_time = time.time()
-    frame_count = 0
+    
+    print("\033[?25l", end="", flush=True)  # Esconde cursor
+    print("\033[?7l", end="", flush=True)  # Desabilita auto-wrap
+    
     # Calcula altura fixa uma vez (do primeiro frame)
     ret, first_frame = cap.read()
     if not ret:
         print("Erro no primeiro frame.")
         return
-    _, fixed_height = frame_to_ascii(first_frame, width, chars)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset para início
+    _, calculated_height = frame_to_ascii(first_frame, width, chars)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    
+    # *** USA height_limit do argumento ***
+    TERMINAL_HEIGHT = height_limit
+    fixed_height = min(calculated_height, TERMINAL_HEIGHT)
+    
+    print(f"Reproduzindo: {video_path.name}")
+    print(f"FPS usado: {fps:.1f} | Duração: {duration_sec:.1f} seg | Frames: {max_frames}")
+    print(f"Pulando frames: {skip_frames} em {skip_frames} | Delay áudio: {audio_delay:.1f} seg")
+    print(f"Altura configurada: {TERMINAL_HEIGHT} linhas (usando {fixed_height})")
+    print("Pressione Ctrl+C para parar\n")
+    
     # Config para save
     output_dir = None
     config = None
@@ -86,54 +99,61 @@ def play_in_terminal(video_path, width=65, fps_target=60, seconds=120, skip_fram
         config = {
             "video": str(video_path),
             "width": width,
+            "height": height_limit,
             "fps": fps,
             "seconds": seconds,
             "skip_frames": skip_frames,
             "audio_delay": audio_delay,
             "chars": chars,
-            "start_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time)),
-            "total_frames_saved": 0,
-            "fixed_height": fixed_height
+            "fixed_height": fixed_height,
+            "start_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
+            "total_frames_saved": 0
         }
         print(f"Salvando frames em: {output_dir}")
-    # Inicia áudio com delay
+    
     time.sleep(audio_delay)
     pygame.mixer.music.play()
+    
+    start_time = time.time()
+    frame_count = 0
+    
     try:
         while cap.isOpened() and frame_count < max_frames:
             ret, frame = cap.read()
             if not ret:
                 break
-            # Pula frames conforme configurado
+            
             frame_count += 1
             if frame_count % skip_frames != 1:
                 continue
+            
             ascii_lines, _ = frame_to_ascii(frame, width, chars)
-            # Preenche com linhas vazias se necessário (para altura fixa)
+            ascii_lines = ascii_lines[:fixed_height]
             while len(ascii_lines) < fixed_height:
-                ascii_lines.append("")
-            # Re-desenhar sem clear total: move cursor para topo e apaga abaixo
-            print("\033[H\033[J", end="", flush=True)  # Move para topo + erase below
+                ascii_lines.append(" " * width + "\033[0m")
+            
+            print("\x1b[2J\x1b[3J\x1b[H\x1b[?25l\x1b[?1049h", end="", flush=True)
             print("\n".join(ascii_lines), flush=True)
-            # Ajuste de tempo para manter FPS
+            
             expected_time = frame_count * frame_time
             elapsed = time.time() - start_time
             sleep_time = expected_time - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
-            # Save se ativado
+            
             if save:
                 txt_path = os.path.join(output_dir, f"frame_{saved_frame_idx:06d}.txt")
                 with open(txt_path, "w", encoding="utf-8") as f:
                     f.write("\n".join(ascii_lines))
                 saved_frame_idx += 1
+                
     except KeyboardInterrupt:
         print("\nParado pelo usuário")
     finally:
         cap.release()
         pygame.mixer.music.stop()
         pygame.mixer.quit()
-        print("\033[?25h\033[0m", end="", flush=True) # Mostra cursor e reseta cores
+        print("\033[?25h\033[0m\033[?1049l\033[?7h", end="", flush=True)
         if save and config:
             config["total_frames_saved"] = saved_frame_idx
             with open(os.path.join(output_dir, "config.json"), "w") as f:
@@ -141,22 +161,26 @@ def play_in_terminal(video_path, width=65, fps_target=60, seconds=120, skip_fram
             print(f"Salvo {saved_frame_idx} frames + config.json em {output_dir}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Vídeo → ASCII art no terminal com áudio e opções avançadas")
+    parser = argparse.ArgumentParser(description="Vídeo → ASCII art no terminal com áudio (SEM SCROLLBACK)")
     parser.add_argument("video", help="Caminho do vídeo")
     parser.add_argument("-w", "--width", type=int, default=115, help="Largura em caracteres")
-    parser.add_argument("--fps", type=int, default=34, help="FPS alvo (usa FPS do vídeo por padrão)")
-    parser.add_argument("--seconds", type=int, default=180, help="Duração máxima em segundos")
-    parser.add_argument("-s", "--skip-frames", type=int, default=15, help="Pular frames (ex: 2 = pula de 2 em 2, 3 = de 3 em 3)")
-    parser.add_argument("-d", "--audio-delay", type=float, default=5.0, help="Delay em segundos para iniciar o áudio (positivo = atrasar música, negativo = adiantar)")
-    parser.add_argument("--chars", default="0123456789", help="Caracteres (escuro → claro)")
-    parser.add_argument("--frames-all", action="store_true", help="Usa todos os frames (ignora --skip-frames e --seconds)")
-    parser.add_argument("--save", action="store_true", help="Salva todos os frames ASCII em pasta + json com config")
+    parser.add_argument("--height", type=int, default=29, help="Altura máxima (linhas)")  # ← NOVO!
+    parser.add_argument("--fps", type=int, default=34, help="FPS alvo")
+    parser.add_argument("--seconds", type=int, default=180, help="Duração máxima (segundos)")
+    parser.add_argument("-s", "--skip-frames", type=int, default=15, help="Pular frames")
+    parser.add_argument("-d", "--audio-delay", type=float, default=5.0, help="Delay áudio")
+    parser.add_argument("--chars", default=" .:-=+*#%@", help="Caracteres (escuro→claro)")
+    parser.add_argument("--frames-all", action="store_true", help="Usa todos os frames")
+    parser.add_argument("--save", action="store_true", help="Salva frames ASCII")
     args = parser.parse_args()
+    
     if args.skip_frames < 1:
         print("Erro: --skip-frames deve ser >= 1")
         sys.exit(1)
+    
     video_path = Path(args.video)
     if not video_path.is_file():
         print(f"Arquivo não encontrado: {video_path}")
         sys.exit(1)
-    play_in_terminal(video_path, args.width, args.fps, args.seconds, args.skip_frames, args.audio_delay, args.chars, args.frames_all, args.save)
+    
+    play_in_terminal(video_path, args.width, args.height, args.fps, args.seconds, args.skip_frames, args.audio_delay, args.chars, args.frames_all, args.save)
