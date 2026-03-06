@@ -89,25 +89,25 @@ python main.py video.mp4
 ### ▶️ ASCII estilo matrix
 
 ```bash
-python main.py video.mp4 -w 120 --fps 40 --chars "01"
+python main.py video.mp4 -w 100 --fps 40 --chars "01"
 ```
 
 ### ▶️ ASCII detalhado
 
 ```bash
-python main.py video.mp4 -w 130 --fps 35 -s 15 --chars ".:-=+*#%@"
+python main.py video.mp4 -w 100 --fps 40 -s 10 --chars ".:-=+*#%@"
 ```
 
 ### ▶️ ASCII numérico
 
 ```bash
-python main.py video.mp4 -w 115 --fps 35 -s 15 --chars "0123456789"
+python main.py video.mp4 -w 100 --fps 40 -s 10 --chars "0123456789"
 ```
 
 ### ▶️ Controle de altura do terminal
 
 ```bash
-python main.py video.mp4 --height 40 -w 100
+python main.py video.mp4 --height 26 -w 100
 ```
 
 ### ▶️ Salvar todos os frames ASCII
@@ -165,7 +165,7 @@ python main.py video.mp4 -d 3.0
 ### Terminal pequeno demais
 Use `--height` para limitar a altura:
 ```bash
-python main.py video.mp4 --height 20
+python main.py video.mp4 --height 26
 ```
 
 ### Performance lenta
