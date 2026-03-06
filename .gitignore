@@ -1,0 +1,12 @@
+# .gitignore
+__pycache__/
+*.pyc
+*.wav
+*.mp3
+*.exe
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+audio.wav
+ascii_frames_*/
+.env
